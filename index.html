@@ -936,13 +936,17 @@ document.getElementById('coinmod').onclick=e=>{if(e.target===e.currentTarget)clo
 // ═══════════════════════════════════════════════════════════════════
 // AGENTES IA — via Anthropic API (funciona en Claude.ai artifacts)
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// MOTOR DE AGENTES IA — Análisis local inteligente basado en datos
+// live de CoinGecko. Funciona en GitHub Pages, local y Claude.ai.
+// ═══════════════════════════════════════════════════════════════════
 const ADEFS=[
-  {id:'fin', ico:'👔',n:'Dr. Marco Financiero', t:'PhD Finanzas · CFA · 20 años en mercados', sp:'Valoración, portafolio, riesgo',bg:'rgba(56,189,248,.1)'},
-  {id:'data',ico:'🔬',n:'Dra. Elena DataSci',   t:'PhD Análisis de Datos · ML · Series temporales', sp:'Predicción, patrones, estadística',bg:'rgba(192,132,252,.1)'},
-  {id:'risk',ico:'🛡',n:'Prof. Andrés Riesgo',  t:'PhD Economía · Ex-Banco Central · VaR', sp:'VaR, cobertura, correlación',bg:'rgba(255,77,106,.1)'},
-  {id:'tech',ico:'📈',n:'Sr. Carlos Técnico',   t:'Analista Técnico · RSI/MACD/BB · 15 años cripto', sp:'Timing, soportes, resistencias',bg:'rgba(0,229,160,.08)'},
-  {id:'macro',ico:'🌐',n:'Dra. Sofía Macro',    t:'PhD Economía Global · Fed Watcher · Ciclos halving', sp:'Macro, ciclos, regulación',bg:'rgba(251,191,36,.08)'},
-  {id:'defi',ico:'⚡',n:'Dr. Luis DeFi',        t:'PhD Blockchain · Smart Contracts · DeFi', sp:'TVL, yields, protocolos',bg:'rgba(192,132,252,.1)'},
+  {id:'fin', ico:'👔',n:'Dr. Marco Financiero', t:'PhD Finanzas · CFA · 20 años en mercados',      sp:'Valoración, portafolio, riesgo',    bg:'rgba(56,189,248,.1)'},
+  {id:'data',ico:'🔬',n:'Dra. Elena DataSci',   t:'PhD Análisis de Datos · ML · Series temporales',sp:'Predicción, patrones, estadística', bg:'rgba(192,132,252,.1)'},
+  {id:'risk',ico:'🛡',n:'Prof. Andrés Riesgo',  t:'PhD Economía · Ex-Banco Central · VaR',          sp:'VaR, cobertura, correlación',       bg:'rgba(255,77,106,.1)'},
+  {id:'tech',ico:'📈',n:'Sr. Carlos Técnico',   t:'Analista Técnico · RSI/MACD/BB · 15 años cripto',sp:'Timing, soportes, resistencias',   bg:'rgba(0,229,160,.08)'},
+  {id:'macro',ico:'🌐',n:'Dra. Sofía Macro',   t:'PhD Economía Global · Fed Watcher · Halving',    sp:'Macro, ciclos, regulación',         bg:'rgba(251,191,36,.08)'},
+  {id:'defi',ico:'⚡',n:'Dr. Luis DeFi',        t:'PhD Blockchain · Smart Contracts · DeFi',        sp:'TVL, yields, protocolos',           bg:'rgba(192,132,252,.1)'},
 ];
 
 function buildAgents(){
@@ -953,188 +957,295 @@ function buildAgents(){
         <div class="agav" style="background:${a.bg}">${a.ico}</div>
         <div><div class="agn">${a.n}</div><div class="agt">${a.t}</div></div>
       </div>
-      <div class="agb" id="ab-${a.id}">Presiona ▶ para analizar tu portafolio real con datos en vivo del mercado.</div>
+      <div class="agb" id="ab-${a.id}">Presiona <strong>▶ Consultar</strong> para recibir análisis experto basado en tus montos reales y los precios en vivo del mercado.</div>
       <div class="agf"><span class="agsp">${a.sp}</span><button class="rbt" onclick="runAgent('${a.id}')">▶ Consultar</button></div>
     </div>`).join('');
 }
 
+// ── Recopila todos los datos actuales del portafolio ──
 function buildCtx(){
   const tot=getTotal();
-  const myPort=COINS.map(c=>{
+  const coins=COINS.map(c=>{
     const amt=parseFloat(MA[c.id])||0;
     const d=LD[c.id]||{};
-    if(amt===0&&c.pi===0)return null;
-    const mp=tot>0?(amt/tot*100).toFixed(1):0;
-    const dev=(parseFloat(mp)-c.pi).toFixed(1);
-    return`  ${c.t.padEnd(6)}: monto=$${fn(amt,2).padStart(9)} | ${mp}% real vs ${c.pi}% ideal | dev=${dev}% | precio=$${fp(d.price||0)} | 24h=${(d.ch24||0).toFixed(1)}% | 7d=${(d.ch7||0).toFixed(1)}% | RSI=${d.rsi||'?'} | señal=${d.sig||'?'}`;
-  }).filter(Boolean).join('\n');
-  const mkt=COINS.filter(c=>LD[c.id]?.price>0).map(c=>{
-    const d=LD[c.id];
-    return`${c.t}:$${fp(d.price)}(24h:${d.ch24.toFixed(1)}%,7d:${d.ch7.toFixed(1)}%,RSI:${d.rsi},sig:${d.sig})`;
-  }).join(' | ');
-  return{tot:fn(tot,2),myPort,mkt,fg:FG.v!=null?`${FG.v} — ${FG.l}`:'N/A',date:new Date().toLocaleDateString('es-PA',{weekday:'long',year:'numeric',month:'long',day:'numeric'})};
+    const mp=tot>0?(amt/tot*100):0;
+    const dev=mp-c.pi;
+    return{...c,amt,mp,dev,d,rsi:d.rsi??50,sig:d.sig??'WAIT',
+      ch24:d.ch24??0,ch7:d.ch7??0,price:d.price??0,
+      mcap:d.mcap??0,vol:d.vol??0};
+  });
+  const withAmt=coins.filter(c=>c.amt>0);
+  const buys=coins.filter(c=>c.sig==='BUY');
+  const sells=coins.filter(c=>c.sig==='SELL');
+  const over=withAmt.filter(c=>c.dev>4);
+  const under=coins.filter(c=>c.pi>0&&c.dev<-4);
+  const topRSI=coins.filter(c=>c.amt>0).sort((a,b)=>a.rsi-b.rsi);   // más bajo = más sobreventa
+  const btc=coins.find(c=>c.id==='bitcoin')||{};
+  const eth=coins.find(c=>c.id==='ethereum')||{};
+  const sol=coins.find(c=>c.id==='solana')||{};
+  const stableAmt=coins.filter(c=>c.cat==='stable').reduce((s,c)=>s+c.amt,0);
+  const stablePct=tot>0?(stableAmt/tot*100):0;
+  const defiCoins=['aave','uniswap','1inch'].map(id=>coins.find(c=>c.id===id)).filter(Boolean);
+  const fg=FG.v??50;
+  const fgLabel=FG.l||'Neutral';
+  return{tot,coins,withAmt,buys,sells,over,under,topRSI,btc,eth,sol,
+    stableAmt,stablePct,defiCoins,fg,fgLabel,
+    dateStr:new Date().toLocaleDateString('es-PA',{weekday:'long',year:'numeric',month:'long',day:'numeric'})};
 }
 
-function getPrompt(id){
-  const ctx=buildCtx();
-  const base=`FECHA: ${ctx.date}
-CAPITAL TOTAL DEL INVERSOR: $${ctx.tot}
-FEAR & GREED INDEX (en vivo): ${ctx.fg}
+// ── Motor de análisis local: genera HTML detallado por agente ──
+function analyzeLocal(id){
+  const C=buildCtx();
+  const{tot,withAmt,buys,sells,over,under,topRSI,btc,eth,sol,stablePct,defiCoins,fg,fgLabel,dateStr}=C;
 
-MI PORTAFOLIO REAL (monto actual | % real | % ideal | desviación | precio live | cambios | RSI | señal):
-${ctx.myPort}
+  // Helper shortcuts
+  const prc=(c)=>c.price?`$${fp(c.price)}`:'—';
+  const chg=(c,d)=>{const v=d==='7'?c.ch7:c.ch24;return(v>=0?'<span class="buy">+':'<span class="sell">')+v.toFixed(2)+'%</span>';};
+  const sgn=(c)=>`<span class="sig ${c.sig}" style="font-size:.58rem">${c.sig}</span>`;
+  const amt=(c)=>c.amt>0?`$${fn(c.amt,2)}`:'—';
+  const dev=(c)=>c.amt>0?(c.dev>0?`<span class="sell">+${c.dev.toFixed(1)}% EXCESO</span>`:`<span class="buy">${c.dev.toFixed(1)}% DÉFICIT</span>`):'sin posición';
+  const noData=tot===0;
 
-MERCADO EN VIVO (todos los activos):
-${ctx.mkt}`;
-
-  const P={
-fin:`Eres el Dr. Marco Financiero, PhD Finanzas y CFA con 20 años en mercados. Analiza el portafolio REAL:
-
-${base}
-
-RESPONDE EN ESPAÑOL con este formato:
-**EVALUACIÓN GENERAL:** (2 líneas)
-**VENDER / REDUCIR:** lista exacta de monedas con exceso y monto a reducir
-**COMPRAR / AUMENTAR:** lista exacta de monedas con déficit y señal BUY activa
-**ACCIÓN PRIORITARIA HOY:** una acción concreta con monto específico
-
-Máximo 200 palabras. Usa los datos reales del portafolio.`,
-
-data:`Eres la Dra. Elena DataSci, PhD Análisis de Datos y ML.
-
-${base}
-
-RESPONDE EN ESPAÑOL:
-**MOMENTUM ANÁLISIS:** cuáles posiciones del inversor muestran momentum positivo vs negativo
-**SCORE ESTADÍSTICO:** BTC, ETH, SOL, AVAX, ICP, XRP — score 1-10 basado en datos actuales
-**ANOMALÍAS:** alguna posición con comportamiento atípico
-**TOP 3 OUTLOOK 7-14 DÍAS:** mejores posiciones estadísticamente para los próximos días
-
-Máximo 200 palabras.`,
-
-risk:`Eres el Prof. Andrés Riesgo, PhD Economía, ex-banco central.
-
-${base}
-
-RESPONDE EN ESPAÑOL:
-**VAR ESTIMADO:** pérdida máxima esperada en 24h para el portafolio real
-**POSICIONES MÁS RIESGOSAS:** en el portafolio actual del inversor
-**REBALANCEO URGENTE:** alguna posición requiere acción inmediata
-**% EN STABLECOINS:** recomendado dado Fear&Greed ${ctx.fg}
-
-Máximo 200 palabras. Conservador y protector del capital.`,
-
-tech:`Eres Carlos Técnico, analista técnico 15 años en cripto.
-
-${base}
-
-RESPONDE EN ESPAÑOL:
-**RSI ANÁLISIS:** posiciones en sobreventa (<30) = comprar, sobrecompra (>70) = riesgo
-**TENDENCIA TÉCNICA:** del mercado según BTC y ETH actuales
-**MEJOR ENTRADA:** próximos 3-5 días según datos actuales
-**STOP-LOSS:** niveles para las 3 posiciones más grandes del inversor
-
-Máximo 200 palabras.`,
-
-macro:`Eres la Dra. Sofía Macro, PhD Economía Global.
-
-${base}
-
-RESPONDE EN ESPAÑOL:
-**CICLO HALVING:** BTC halving abril 2024, ¿fase actual y qué implica para el portafolio?
-**FEAR & GREED ${ctx.fg}:** históricamente este nivel favorece ¿comprar o vender?
-**DOMINANCIA BTC:** señales de rotación hacia altcoins o a la inversa
-**EXPOSICIÓN TOTAL:** ¿aumentar, mantener o reducir cripto dado el macro actual?
-
-Máximo 200 palabras.`,
-
-defi:`Eres el Dr. Luis DeFi, PhD Blockchain.
-
-${base}
-
-RESPONDE EN ESPAÑOL:
-**ANÁLISIS DeFi DEL PORTAFOLIO:** evalúa AAVE, UNI, 1INCH que tiene el inversor
-**YIELD OPORTUNIDADES:** con USDT y DAI en el portafolio, estrategias de rendimiento
-**PESO DeFi:** el % DeFi actual es apropiado o debe ajustarse
-**RECOMENDACIÓN:** para posiciones DeFi concretas del inversor
-
-Máximo 200 palabras.`
-  };
-  return P[id]||'Analiza el portafolio.';
-}
-
-async function runAgent(id){
-  const body=document.getElementById('ab-'+id);
-  body.innerHTML='<span class="think">Analizando tu portafolio real con datos en vivo...</span>';
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        messages:[{role:'user',content:getPrompt(id)}]
-      })
-    });
-    if(!res.ok){
-      const err=await res.json().catch(()=>({}));
-      throw new Error(err.error?.message||`HTTP ${res.status}`);
-    }
-    const data=await res.json();
-    const txt=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'Sin respuesta.';
-    body.innerHTML=fmtAgt(txt);
-    ARES[id]=txt;
-    updConsensus();
-  }catch(e){
-    body.innerHTML=`<span style="color:var(--rd)">Error: ${e.message}</span>`;
+  if(noData){
+    return`<strong>⚠ Sin datos de portafolio</strong><br><br>
+Ve a <strong>"Mi Portafolio"</strong> e ingresa cuánto tienes invertido en cada moneda para recibir análisis personalizado.<br><br>
+Con los precios actuales del mercado:<br>
+${buys.length?`▲ <span class="buy">Señales BUY ahora:</span> ${buys.slice(0,5).map(c=>`${c.t}(RSI:${c.rsi})`).join(', ')}<br>`:''}
+${sells.length?`▼ <span class="sell">Señales SELL ahora:</span> ${sells.map(c=>c.t).join(', ')}<br>`:''}
+Fear & Greed: <strong>${fg} — ${fgLabel}</strong>`;
   }
+
+  const analyses={
+    fin:()=>{
+      // Análisis financiero: distribución, excesos, déficits, acciones concretas
+      const topPos=withAmt.sort((a,b)=>b.amt-a.amt).slice(0,5);
+      const btcEthPct=withAmt.filter(c=>['bitcoin','ethereum'].includes(c.id)).reduce((s,c)=>s+c.mp,0);
+      const specAmt=withAmt.filter(c=>c.cat==='spec').reduce((s,c)=>s+c.amt,0);
+      const specPct=tot>0?(specAmt/tot*100):0;
+      const sellList=over.filter(c=>c.sig!=='BUY').sort((a,b)=>b.dev-a.dev);
+      const buyList=under.filter(c=>c.sig!=='SELL'&&c.sig!=='WAIT').sort((a,b)=>a.dev-b.dev);
+      const bestBuy=buys.filter(c=>c.amt>0||c.pi>0).sort((a,b)=>a.rsi-b.rsi)[0];
+      return`<strong>📊 EVALUACIÓN GENERAL</strong><br>
+Portafolio total: <span class="buy">$${fn(tot,2)}</span> · ${withAmt.length} activos activos.<br>
+BTC+ETH representan el <strong>${btcEthPct.toFixed(1)}%</strong> ${btcEthPct>=45?'<span class="buy">✓ base sólida</span>':'<span class="sell">⚠ por debajo del mínimo 45%</span>'}. ${specPct>10?`<span class="sell">Especulativas al ${specPct.toFixed(1)}% — alto riesgo.</span>`:''}<br><br>
+<strong>⬇ VENDER / REDUCIR</strong><br>
+${sellList.length?sellList.map(c=>`• <strong>${c.t}</strong> (${amt(c)}, exceso ${c.dev.toFixed(1)}%) → reducir ~$${(c.amt*0.25).toFixed(0)} y mover a stablecoins`).join('<br>'):
+`• No hay posiciones con exceso significativo que reducir ahora.`}<br><br>
+<strong>⬆ COMPRAR / AUMENTAR</strong><br>
+${buyList.length?buyList.slice(0,4).map(c=>`• <strong>${c.t}</strong> ${sgn(c)} (déficit ${Math.abs(c.dev).toFixed(1)}%, precio ${prc(c)}, 7d:${chg(c,'7')}) → aumentar ~$${(tot*Math.abs(c.dev)/100*0.5).toFixed(0)}`).join('<br>'):
+`• No hay déficits significativos. Portafolio bien distribuido.`}<br><br>
+<strong>🎯 ACCIÓN PRIORITARIA HOY</strong><br>
+${bestBuy?`Acumular <strong>${bestBuy.t}</strong> (RSI:${bestBuy.rsi}, precio ${prc(bestBuy)}) con $${(tot*0.03).toFixed(0)} aprovechando la caída del ${bestBuy.ch7.toFixed(1)}% en 7 días.`
+:sells.length?`Reducir <strong>${sells[0].t}</strong> (RSI:${sells[0].rsi}, sobrecomprado) tomando 20% de ganancia ($${(withAmt.find(c=>c.id===sells[0].id)?.amt*0.2||0).toFixed(0)}).`
+:`Mantener posiciones. Mercado sin señal clara — revisar en 24-48h.`}`;
+    },
+
+    data:()=>{
+      // Análisis cuantitativo: momentum, scores, anomalías
+      const scored=withAmt.map(c=>{
+        let score=5;
+        if(c.rsi<30)score+=2;else if(c.rsi<40)score+=1;else if(c.rsi>70)score-=2;else if(c.rsi>60)score-=1;
+        if(c.ch7>0)score+=1;if(c.ch7>10)score+=1;if(c.ch7<-15)score-=1;
+        if(c.ch24>0&&c.ch7>0)score+=1;// doble momentum positivo
+        if(c.sig==='BUY')score+=1;if(c.sig==='SELL')score-=1;
+        if(c.cat==='stable')score=5;
+        score=Math.max(1,Math.min(10,Math.round(score)));
+        return{...c,score};
+      }).sort((a,b)=>b.score-a.score);
+      const anomalias=withAmt.filter(c=>Math.abs(c.ch24)>8||(c.rsi<25&&c.ch7<-20));
+      const top3=scored.filter(c=>c.cat!=='stable').slice(0,3);
+      return`<strong>📐 SCORE ESTADÍSTICO (1-10)</strong><br>
+${scored.filter(c=>c.cat!=='stable').map(c=>`• <strong>${c.t}</strong>: <span style="color:${c.score>=7?'var(--g)':c.score>=5?'var(--go)':'var(--rd)'}">★${c.score}/10</span> | RSI:${c.rsi} | 24h:${chg(c,'24')} | 7d:${chg(c,'7')} | ${sgn(c)}`).join('<br>')}<br><br>
+<strong>📊 MOMENTUM ANÁLISIS</strong><br>
+Positivo (24h y 7d ambos verdes): ${withAmt.filter(c=>c.ch24>0&&c.ch7>0).map(c=>c.t).join(', ')||'ninguno'}<br>
+Negativo (ambas caídas): ${withAmt.filter(c=>c.ch24<0&&c.ch7<0).map(c=>c.t).join(', ')||'ninguno'}<br><br>
+<strong>🔍 ANOMALÍAS DETECTADAS</strong><br>
+${anomalias.length?anomalias.map(c=>`• <strong>${c.t}</strong>: 24h ${c.ch24.toFixed(1)}%, RSI ${c.rsi} — comportamiento extremo, monitorear`).join('<br>'):'Sin anomalías significativas en el portafolio.'}<br><br>
+<strong>🏆 TOP 3 OUTLOOK 7-14 DÍAS</strong><br>
+${top3.map((c,i)=>`${i+1}. <strong>${c.t}</strong> (score ${c.score}/10) — RSI ${c.rsi}, precio ${prc(c)}. ${c.sig==='BUY'?'Señal de entrada activa.':'Mantener y observar.'}`).join('<br>')}`;
+    },
+
+    risk:()=>{
+      // Análisis de riesgo: VaR, concentración, stop-loss
+      const avgVol=withAmt.reduce((s,c)=>s+Math.abs(c.ch24)*c.mp/100,0);
+      const varEst=(tot*avgVol*2.33/100);
+      const topRisk=withAmt.filter(c=>c.cat!=='stable').sort((a,b)=>Math.abs(b.ch24)-Math.abs(a.ch24)).slice(0,3);
+      const concRisk=withAmt.filter(c=>c.mp>15&&c.cat!=='security');
+      const needRebal=over.filter(c=>c.dev>8);
+      const recStable=fg<30?20:fg<50?15:fg>75?8:12;
+      return`<strong>📉 VaR ESTIMADO (95%, 24h)</strong><br>
+Volatilidad ponderada del portafolio: <strong>${avgVol.toFixed(2)}%</strong><br>
+Pérdida máxima esperada (95%): <span class="sell"><strong>$${fn(varEst,2)}</strong></span> (${(varEst/tot*100).toFixed(1)}% del capital)<br>
+→ En escenario extremo (99%): ~$${fn(varEst*1.5,2)}<br><br>
+<strong>⚠ POSICIONES MÁS RIESGOSAS HOY</strong><br>
+${topRisk.map(c=>`• <strong>${c.t}</strong>: vol. 24h ${Math.abs(c.ch24).toFixed(1)}%, monto ${amt(c)}, RSI ${c.rsi} ${c.rsi>70?'<span class="sell">⚠ SOBRECOMPRADO</span>':c.rsi<30?'<span class="buy">↓ sobreventa</span>':''}`).join('<br>')}<br><br>
+<strong>🔄 REBALANCEO URGENTE</strong><br>
+${needRebal.length?needRebal.map(c=>`• <strong>${c.t}</strong>: exceso de ${c.dev.toFixed(1)}% (tienes $${fn(c.amt,2)}, ideal $${fn(tot*c.pi/100,2)}) → reducir $${fn(c.amt-tot*c.pi/100,2)}`).join('<br>'):'No hay posiciones con desviación urgente (>8%).'}
+${concRisk.length?`<br>• <span class="sell">Concentración:</span> ${concRisk.map(c=>c.t).join(', ')} superan 15% — diversificar.`:''}<br><br>
+<strong>💰 % EN STABLECOINS RECOMENDADO</strong><br>
+F&G actual: <strong>${fg} (${fgLabel})</strong><br>
+Tu % actual: <strong>${fn(stablePct,1)}%</strong> · Recomendado: <span class="${stablePct<recStable?'sell':'buy'}"><strong>${recStable}%</strong></span>
+${stablePct<recStable?`→ Aumentar stablecoins en ~$${fn(tot*(recStable-stablePct)/100,2)} para proteger capital.`:'→ Cobertura adecuada.'}`;
+    },
+
+    tech:()=>{
+      // Análisis técnico: RSI, tendencias, soportes, stop-loss
+      const sobreventa=withAmt.filter(c=>c.rsi<35).sort((a,b)=>a.rsi-b.rsi);
+      const sobrecompra=withAmt.filter(c=>c.rsi>68).sort((a,b)=>b.rsi-a.rsi);
+      const btcTrend=btc.ch7>3?'ALCISTA ▲':btc.ch7<-3?'BAJISTA ▼':'LATERAL ➡';
+      const ethTrend=eth.ch7>3?'ALCISTA ▲':eth.ch7<-3?'BAJISTA ▼':'LATERAL ➡';
+      const mktDir=(btc.ch7+eth.ch7)/2>2?'ALCISTA':((btc.ch7+eth.ch7)/2<-2)?'BAJISTA':'LATERAL';
+      const top3=withAmt.filter(c=>c.cat!=='stable').sort((a,b)=>b.amt-a.amt).slice(0,3);
+      return`<strong>📊 RSI ANÁLISIS</strong><br>
+${sobreventa.length?`<span class="buy">● SOBREVENTA (RSI&lt;35) — OPORTUNIDAD:</span><br>
+${sobreventa.map(c=>`  • <strong>${c.t}</strong>: RSI ${c.rsi} | precio ${prc(c)} | 7d:${chg(c,'7')} → <span class="buy">acumular</span>`).join('<br>')}`:
+'Sin activos en sobreventa en tu portafolio.'}<br>
+${sobrecompra.length?`<br><span class="sell">● SOBRECOMPRA (RSI&gt;68) — PRECAUCIÓN:</span><br>
+${sobrecompra.map(c=>`  • <strong>${c.t}</strong>: RSI ${c.rsi} | precio ${prc(c)} | 7d:${chg(c,'7')} → <span class="sell">tomar ganancia</span>`).join('<br>')}`:''}<br><br>
+<strong>📈 TENDENCIA TÉCNICA DEL MERCADO</strong><br>
+• BTC: <strong>${btcTrend}</strong> (precio ${prc(btc)}, 7d:${chg(btc,'7')}, RSI:${btc.rsi})<br>
+• ETH: <strong>${ethTrend}</strong> (precio ${prc(eth)}, 7d:${chg(eth,'7')}, RSI:${eth.rsi})<br>
+• Sesgo general: <span class="${mktDir==='ALCISTA'?'buy':mktDir==='BAJISTA'?'sell':'hold'}"><strong>${mktDir}</strong></span><br><br>
+<strong>🎯 MEJOR PUNTO DE ENTRADA (3-5 días)</strong><br>
+${mktDir==='BAJISTA'?`Mercado bajista. Espera confirmación de soporte. Entrada gradual si BTC rebota sobre $${fn((btc.price||0)*0.95,0)}.`:
+mktDir==='ALCISTA'?`Mercado alcista. Compras en retrocesos del 3-5%. Activos con RSI bajo son prioridad.`:
+`Mercado lateral. DCA semana en posiciones con mayor déficit. Evitar entradas grandes.`}<br><br>
+<strong>🛑 STOP-LOSS RECOMENDADOS</strong><br>
+${top3.map(c=>{
+  const sl=c.cat==='security'?0.15:c.cat==='spec'?0.30:0.22;
+  return`• <strong>${c.t}</strong> (${amt(c)}) → stop en $${fn((c.price||0)*(1-sl),2)} (-${(sl*100).toFixed(0)}% desde precio actual)`;
+}).join('<br>')}`;
+    },
+
+    macro:()=>{
+      // Análisis macroeconómico: halving, dominancia, ciclos
+      const halvingDate=new Date('2024-04-20');
+      const daysSinceHalving=Math.floor((Date.now()-halvingDate)/86400000);
+      const monthsPost=Math.floor(daysSinceHalving/30);
+      let halvingPhase='';
+      if(monthsPost<6)halvingPhase='Fase inicial post-halving (1-6 meses). Históricamente precede el bull run.';
+      else if(monthsPost<12)halvingPhase='Fase de aceleración (6-12 meses post-halving). Históricamente: mayores ganancias en altcoins.';
+      else if(monthsPost<18)halvingPhase='Fase de maduración (12-18 meses). Históricamente: pico de mercado cercano, tomar ganancias parciales.';
+      else halvingPhase='Fase post-pico. Históricamente: corrección y consolidación. Priorizar stablecoins.';
+      const fgPhase=fg<25?'Miedo Extremo — históricamente ÓPTIMO para comprar':fg<50?'Miedo — mercado pesimista, oportunidades selectivas':fg<75?'Avaricia — mercado optimista, reducir gradualmente':' Avaricia Extrema — históricamente señal de techo';
+      const btcDom=withAmt.length?withAmt.filter(c=>c.id==='bitcoin').reduce((s,c)=>s+c.mp,0):30;
+      const altcoinMomentum=withAmt.filter(c=>!['bitcoin','ethereum'].includes(c.id)&&c.cat!=='stable').filter(c=>c.ch7>0).length;
+      return`<strong>📅 CICLO HALVING</strong><br>
+BTC Halving: 20 abril 2024 → hace <strong>${monthsPost} meses</strong><br>
+Fase actual: <strong>${halvingPhase}</strong><br><br>
+<strong>😨 FEAR & GREED: ${fg} — ${fgLabel}</strong><br>
+${fgPhase}<br>
+${fg<40?`→ <span class="buy">Con F&G bajo: historia sugiere acumular BTC y ETH en tramos.</span>`:fg>70?`→ <span class="sell">Con F&G alto: considerar tomar 10-15% de ganancia en stablecoins.</span>`:'→ <span class="hold">F&G neutral: mantener estrategia sin cambios bruscos.</span>'}<br><br>
+<strong>🔄 DOMINANCIA Y ROTACIÓN</strong><br>
+Tu exposición BTC: <strong>${fn(btcDom,1)}%</strong> del portafolio<br>
+Altcoins en positivo (7d): <strong>${altcoinMomentum}</strong> de ${withAmt.filter(c=>!['bitcoin','ethereum'].includes(c.id)&&c.cat!=='stable').length} activos<br>
+${altcoinMomentum>3?`<span class="buy">→ Rotación hacia altcoins activa. Considerar aumentar SOL/AVAX.</span>`:`<span class="sell">→ Sin rotación hacia altcoins. Capital fluyendo a BTC/ETH o saliendo del mercado.</span>`}<br><br>
+<strong>🌐 EXPOSICIÓN TOTAL RECOMENDADA</strong><br>
+${monthsPost<18&&monthsPost>=6?`<span class="buy">Fase favorable del ciclo. Mantener o aumentar exposición cripto (60-80% del portafolio disponible).</span>`:monthsPost>=18?`<span class="sell">Fase tardía del ciclo. Reducir altcoins especulativas. Aumentar stablecoins al 20-25%.</span>`:`<span class="hold">Fase temprana. Mantener exposición actual y acumular BTC/ETH en caídas.</span>`}`;
+    },
+
+    defi:()=>{
+      // Análisis DeFi: protocolos, yields, TVL
+      const aave=defiCoins.find(c=>c.id==='aave');
+      const uni=defiCoins.find(c=>c.id==='uniswap');
+      const inch=defiCoins.find(c=>c.id==='1inch');
+      const defiTotal=withAmt.filter(c=>c.cat==='defi').reduce((s,c)=>s+c.amt,0);
+      const defiPct=tot>0?(defiTotal/tot*100):0;
+      const dai=withAmt.find(c=>c.id==='dai');
+      const usdt=withAmt.find(c=>c.id==='tether');
+      const stableTotal=(dai?.amt||0)+(usdt?.amt||0);
+      return`<strong>⚡ ANÁLISIS DeFi DEL PORTAFOLIO</strong><br>
+${aave?`• <strong>AAVE</strong> ${sgn(aave)}: ${amt(aave)} invertidos | precio ${prc(aave)} | 7d:${chg(aave,'7')} | RSI:${aave.rsi}
+  → ${aave.rsi<40?'<span class="buy">Oportunidad de acumular. AAVE en zona de valor.</span>':aave.rsi>70?'<span class="sell">RSI alto. Considerar reducir 20%.</span>':'<span class="hold">Mantener. Protocolo líder de lending con buenas métricas.</span>'}`:
+'• <strong>AAVE:</strong> sin posición. Considerar entrada — protocolo líder en préstamos descentralizados.'}<br>
+${uni?`• <strong>UNI</strong> ${sgn(uni)}: ${amt(uni)} | precio ${prc(uni)} | 7d:${chg(uni,'7')} | RSI:${uni.rsi}
+  → ${uni.rsi<40?'<span class="buy">Zona de acumulación. UNI con descuento.</span>':'<span class="hold">Mantener. Exchange DeFi con volumen sostenido.</span>'}`:
+'• <strong>UNI:</strong> sin posición. Exchange DeFi con mayor volumen — considerar 1-2% del portafolio.'}<br>
+${inch?`• <strong>1INCH</strong> ${sgn(inch)}: ${amt(inch)} | precio ${prc(inch)} | 7d:${chg(inch,'7')}`:''}<br><br>
+<strong>💹 YIELD OPORTUNIDADES</strong><br>
+${stableTotal>0?`Tienes $${fn(stableTotal,2)} en stablecoins (DAI/USDT) disponibles para yield:<br>
+• AAVE Lending Pool: ~3-6% APY en DAI/USDT — sin riesgo de precio<br>
+• Uniswap v3 LP: ~8-15% APY — requiere rebalanceo periódico<br>
+• Curve Finance: ~4-8% APY en stablecoins — bajo riesgo impermanente loss`:'Sin stablecoins detectadas. Considera mantener 10-15% en DAI/USDT para aprovechar yields.'}<br><br>
+<strong>⚖ PESO DeFi RECOMENDADO</strong><br>
+Tu % DeFi actual: <strong>${fn(defiPct,1)}%</strong> · Ideal: <strong>5-7%</strong><br>
+${defiPct<4?`<span class="buy">→ Subponderado. Aumentar DeFi en $${fn(tot*0.05-defiTotal,2)} para alcanzar el 5% mínimo.</span>`:defiPct>10?`<span class="sell">→ Sobreponderado. Reducir DeFi en $${fn(defiTotal-tot*0.07,2)} hacia % óptimo.</span>`:'<span class="hold">→ Exposición DeFi dentro del rango óptimo. Mantener.</span>'}`;
+    }
+  };
+  return analyses[id]?analyses[id]():'Sin análisis disponible.';
 }
 
 function fmtAgt(t){
   return t
     .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
-    .replace(/COMPRAR|AUMENTAR|BUY|ACUMULAR/g,'<span class="buy">$&</span>')
-    .replace(/VENDER|REDUCIR|SELL/g,'<span class="sell">$&</span>')
-    .replace(/MANTENER|HOLD/g,'<span class="hold">$&</span>')
+    .replace(/\bCOMPRAR\b|\bAUMENTAR\b|\bACUMULAR\b/g,'<span class="buy">$&</span>')
+    .replace(/\bVENDER\b|\bREDUCIR\b/g,'<span class="sell">$&</span>')
+    .replace(/\bMANTENER\b/g,'<span class="hold">$&</span>')
     .replace(/\n/g,'<br>');
+}
+
+function runAgent(id){
+  const body=document.getElementById('ab-'+id);
+  body.innerHTML='<span class="think">Analizando con datos en vivo de CoinGecko...</span>';
+  // Pequeño delay para mostrar el "pensando" y luego renderizar
+  setTimeout(()=>{
+    try{
+      const html=analyzeLocal(id);
+      body.innerHTML=html;
+      ARES[id]=html;
+      updConsensus();
+    }catch(e){
+      body.innerHTML=`<span style="color:var(--rd)">Error en análisis: ${e.message}</span>`;
+      console.error('Agent error:',id,e);
+    }
+  },600+Math.random()*400);
 }
 
 async function runAll(){
   goTab('agentes',document.querySelector('.nt[onclick*="agentes"]'));
-  for(const a of ADEFS){runAgent(a.id);await w(700);}
+  for(const a of ADEFS){
+    document.getElementById('ab-'+a.id).innerHTML='<span class="think">En cola...</span>';
+  }
+  for(let i=0;i<ADEFS.length;i++){
+    await w(700*i);
+    runAgent(ADEFS[i].id);
+  }
 }
 
 function updConsensus(){
   const cnt=Object.keys(ARES).length;if(!cnt)return;
-  const all=Object.values(ARES).join(' ').toLowerCase();
-  const b=(all.match(/comprar|buy|acumular|sobreventa|oportunidad|aumentar|entrada/g)||[]).length;
-  const s=(all.match(/vender|sell|reducir|sobrecompra|tomar ganancias|disminuir/g)||[]).length;
-  const con=b>s?'⬆ COMPRAR / ACUMULAR':s>b?'⬇ VENDER / REDUCIR':'➡ MANTENER / REBALANCEAR';
-  const col=b>s?'var(--g)':s>b?'var(--rd)':'var(--go)';
-  const tot=getTotal();
-  const over=COINS.filter(c=>{const mp=tot>0?((parseFloat(MA[c.id])||0)/tot*100):0;return mp-c.pi>5;});
-  const under=COINS.filter(c=>{const mp=tot>0?((parseFloat(MA[c.id])||0)/tot*100):0;return c.pi>0&&c.pi-mp>5;});
+  const C=buildCtx();
+  const{over,under,buys,sells,withAmt,fg,fgLabel,tot}=C;
+  const mktBull=buys.length>sells.length;
+  const mktBear=sells.length>buys.length;
+  const con=mktBull?'⬆ COMPRAR / ACUMULAR':mktBear?'⬇ VENDER / REDUCIR':'➡ MANTENER / REBALANCEAR';
+  const col=mktBull?'var(--g)':mktBear?'var(--rd)':'var(--go)';
+  const buyList=under.filter(c=>c.sig!=='SELL').slice(0,4);
+  const sellList=over.filter(c=>c.sig!=='BUY').slice(0,4);
   document.getElementById('conbox').innerHTML=`
     <div style="font-family:var(--hd);font-size:.92rem;font-weight:700;color:${col};margin-bottom:.65rem">
       Consenso (${cnt}/6 agentes): ${con}
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-bottom:.75rem">
       <div style="background:var(--rd2);border:1px solid rgba(255,77,106,.2);border-radius:8px;padding:.7rem">
-        <div style="font-size:.62rem;font-weight:600;color:var(--rd);margin-bottom:.35rem">⬇ Reducir (${s} menciones)</div>
-        <div style="font-size:.6rem;color:var(--mu2);line-height:1.5">
-          ${over.length?`Exceso en: <strong style="color:var(--tx)">${over.map(c=>c.t).join(', ')}</strong>`:'Sin exceso significativo.'}
+        <div style="font-size:.6rem;font-weight:600;color:var(--rd);margin-bottom:.32rem">⬇ VENDER / REDUCIR</div>
+        <div style="font-size:.6rem;color:var(--mu2);line-height:1.55">
+          ${sellList.length?sellList.map(c=>`• <strong style="color:var(--tx)">${c.t}</strong>: exceso ${c.dev.toFixed(1)}%, RSI ${c.rsi} → reducir ~$${(c.amt*0.25).toFixed(0)}`).join('<br>'):'Sin posiciones con exceso que reducir ahora.'}
         </div>
       </div>
       <div style="background:var(--g2);border:1px solid rgba(0,229,160,.2);border-radius:8px;padding:.7rem">
-        <div style="font-size:.62rem;font-weight:600;color:var(--g);margin-bottom:.35rem">⬆ Acumular (${b} menciones)</div>
-        <div style="font-size:.6rem;color:var(--mu2);line-height:1.5">
-          ${under.length?`Déficit en: <strong style="color:var(--tx)">${under.map(c=>c.t).join(', ')}</strong>`:'Bien distribuido.'}
+        <div style="font-size:.6rem;font-weight:600;color:var(--g);margin-bottom:.32rem">⬆ COMPRAR / ACUMULAR</div>
+        <div style="font-size:.6rem;color:var(--mu2);line-height:1.55">
+          ${buyList.length?buyList.map(c=>`• <strong style="color:var(--tx)">${c.t}</strong>: déficit ${Math.abs(c.dev).toFixed(1)}%, RSI ${c.rsi} → agregar ~$${(tot*Math.abs(c.dev)/100*0.4).toFixed(0)}`).join('<br>'):'Portafolio bien distribuido.'}
         </div>
       </div>
     </div>
-    <div style="font-size:.65rem;color:var(--mu2);line-height:1.75">
-      <strong style="color:var(--tx)">Recomendación consolidada:</strong><br>
-      ${b>s?`Mayoría del consejo ve oportunidades. ${under.length?`Prioriza aumentar: ${under.map(c=>c.t).join(', ')}.`:''} Usa caídas del 5-10% como punto de entrada por tramos.`:s>b?`El consejo recomienda prudencia. ${over.length?`Considera reducir: ${over.map(c=>c.t).join(', ')}.`:''} Asegura ganancia parcial en stablecoins.`:`Sin señal clara. Mantén posiciones y ${over.length?`rebalancea (reduce ${over.map(c=>c.t).join(', ')})`:' revisa distribución'} para acercarte a % óptimos.`}
+    <div style="background:var(--bg3);border:1px solid var(--b1);border-radius:8px;padding:.75rem;font-size:.63rem;color:var(--mu2);line-height:1.75">
+      <strong style="color:var(--tx)">🗳 Recomendación consolidada del consejo (${cnt}/6):</strong><br>
+      ${mktBull?`Mercado con sesgo alcista (${buys.length} señales BUY). ${buyList.length?`Prioriza acumular: <strong style="color:var(--g)">${buyList.map(c=>c.t).join(', ')}</strong>.`:''} Usa caídas del 5-10% como punto de entrada por tramos (DCA).`
+      :mktBear?`Mercado con sesgo bajista (${sells.length} señales SELL). ${sellList.length?`Considera reducir: <strong style="color:var(--rd)">${sellList.map(c=>c.t).join(', ')}</strong>.`:''} Mueve al menos 15% a stablecoins para preservar capital.`
+      :`Mercado sin señal clara. ${over.length?`Rebalancea reduciendo <strong style="color:var(--tx)">${over.slice(0,3).map(c=>c.t).join(', ')}</strong>`:' Mantén posiciones actuales'} y espera catalizador de dirección.`}
+      <br>Fear & Greed: <strong style="color:var(--tx)">${fg} — ${fgLabel}</strong>. ${fg<30?'Momento históricamente favorable para acumular BTC/ETH.':fg>75?'Nivel de euforia — precaución, tomar ganancias parciales.':'Nivel neutral.'}
     </div>`;
 }
 
@@ -1195,42 +1306,37 @@ function reqGsToken(){
 
 async function ensureSheetsHeaders(){
   if(!GS_TOKEN||GS_TOKEN==='LOCAL')return;
-  const headers=[['FECHA','CAPITAL INVERTIDO','P&L DIA','VARIACION %','BTC PRECIO','ETH PRECIO','SOL PRECIO','FEAR&GREED','SEÑAL MERCADO','BTC INV','ETH INV','SOL INV','AVAX INV','ICP INV','XRP INV','AAVE INV','UNI INV','NOTA']];
   try{
+    // Solo escribe headers si la celda A1 está vacía
+    const check=await sheetsAPI('GET',`/values/A1`);
+    const hasData=check.values&&check.values[0]&&check.values[0][0];
+    if(hasData)return; // Ya tiene encabezados
+    const headers=[['FECHA','CAPITAL INVERTIDO','P&L DIA','VARIACION %','BTC PRECIO','ETH PRECIO','SOL PRECIO','FEAR&GREED','SEÑAL MERCADO','BTC INV','ETH INV','SOL INV','AVAX INV','ICP INV','XRP INV','AAVE INV','UNI INV','NOTA']];
     await sheetsAPI('PUT',`/values/A1:R1?valueInputOption=USER_ENTERED`,{values:headers});
-    // Formato de cabecera
-    await sheetsAPI('POST',`/batchUpdate`,{requests:[{repeatCell:{range:{sheetId:0,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{backgroundColor:{red:0.03,green:0.09,blue:0.18},textFormat:{foregroundColor:{red:0,green:0.9,blue:0.63},bold:true}}},fields:'userEnteredFormat'}}]});
   }catch(e){console.warn('ensureHeaders:',e.message);}
 }
 
 async function sheetsAPI(method,path,body){
   const url=`https://sheets.googleapis.com/v4/spreadsheets/${SID}${path}`;
-  const res=await fetch(url,{
-    method,
-    headers:{'Authorization':'Bearer '+GS_TOKEN,'Content-Type':'application/json'},
-    body:body?JSON.stringify(body):undefined
-  });
-  if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'Sheets API error');}
+  const opts={method,headers:{'Authorization':'Bearer '+GS_TOKEN,'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  const res=await fetch(url,opts);
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
   return res.json();
 }
 
 async function appendSheetsRow(row){
   if(!GS_TOKEN||GS_TOKEN==='LOCAL')return false;
   try{
-    await sheetsAPI('POST',`/values/A:R:append?valueInputOption=USER_ENTERED`,{values:[row]});
+    // Usar appendValues — agrega siempre al final, nunca sobreescribe
+    await sheetsAPI('POST',`/values/A:R:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,{values:[row]});
     return true;
   }catch(e){console.warn('appendRow:',e.message);return false;}
 }
 
 async function pushPortfolioToSheets(){
-  // Guarda todos los montos del portafolio como una fila especial
-  if(!GS_TOKEN||GS_TOKEN==='LOCAL')return;
-  const row=['PORTAFOLIO',getTotal().toFixed(2),'','',
-    LD['bitcoin']?.price?.toFixed(2)||'',LD['ethereum']?.price?.toFixed(2)||'',LD['solana']?.price?.toFixed(2)||'',
-    FG.v||'',document.getElementById('sv-sig')?.textContent||'',
-    ...COINS.slice(0,5).map(c=>parseFloat(MA[c.id]||0).toFixed(2)),
-    'Actualización de portafolio'];
-  await appendSheetsRow(row);
+  // Eliminado: ya no se guarda una fila suelta de "PORTAFOLIO".
+  // Los montos se guardan junto al registro diario cuando el usuario presiona "💾 Guardar".
 }
 
 async function saveDay(){
@@ -1238,14 +1344,17 @@ async function saveDay(){
   const chg=parseFloat(document.getElementById('inchg').value)||0;
   const note=document.getElementById('innote').value||'';
   const pct=tot?((chg/tot)*100).toFixed(2):0;
+  // Fecha en formato DD/MM/YYYY para Google Sheets
+  const now=new Date();
+  const fecha=now.toLocaleDateString('es-PA',{day:'2-digit',month:'2-digit',year:'numeric'});
   const entry={
-    fecha:new Date().toLocaleDateString('es-PA'),
+    fecha,
     capital:tot.toFixed(2),cambio:chg.toFixed(2),pct,
-    btc:LD['bitcoin']?.price?.toFixed(2)||'—',
-    eth:LD['ethereum']?.price?.toFixed(2)||'—',
-    sol:LD['solana']?.price?.toFixed(2)||'—',
+    btc:LD['bitcoin']?.price?.toFixed(2)||'0',
+    eth:LD['ethereum']?.price?.toFixed(2)||'0',
+    sol:LD['solana']?.price?.toFixed(2)||'0',
     fg:FG.v??'—',
-    signal:document.getElementById('sv-sig')?.textContent||'—',
+    signal:(document.getElementById('sv-sig')?.textContent||'—').replace(/📈|📉|➡/g,'').trim(),
     nota:note,
     amounts:JSON.stringify(MA)
   };
@@ -1254,24 +1363,33 @@ async function saveDay(){
   localStorage.setItem('llb_h',JSON.stringify(HIST));
   renderHist();
 
-  // Guardar en Sheets si está conectado
+  // Guardar en Sheets si está conectado — SOLO fila de datos diarios (NO fila de portafolio)
   if(GS_TOKEN&&GS_TOKEN!=='LOCAL'){
     const row=[
-      entry.fecha,entry.capital,entry.cambio,entry.pct+'%',
-      entry.btc,entry.eth,entry.sol,entry.fg,entry.signal,
-      parseFloat(MA['bitcoin']||0).toFixed(2),
-      parseFloat(MA['ethereum']||0).toFixed(2),
-      parseFloat(MA['solana']||0).toFixed(2),
-      parseFloat(MA['avalanche-2']||0).toFixed(2),
-      parseFloat(MA['internet-computer']||0).toFixed(2),
-      parseFloat(MA['ripple']||0).toFixed(2),
-      parseFloat(MA['aave']||0).toFixed(2),
-      parseFloat(MA['uniswap']||0).toFixed(2),
-      entry.nota
+      entry.fecha,                                      // A: FECHA
+      parseFloat(entry.capital),                        // B: CAPITAL INVERTIDO
+      parseFloat(entry.cambio),                         // C: P&L DIA
+      entry.pct+'%',                                    // D: VARIACION %
+      parseFloat(entry.btc)||0,                         // E: BTC PRECIO
+      parseFloat(entry.eth)||0,                         // F: ETH PRECIO
+      parseFloat(entry.sol)||0,                         // G: SOL PRECIO
+      entry.fg,                                         // H: FEAR&GREED
+      entry.signal,                                     // I: SEÑAL MERCADO
+      parseFloat(MA['bitcoin']||0).toFixed(2),          // J: BTC INV
+      parseFloat(MA['ethereum']||0).toFixed(2),         // K: ETH INV
+      parseFloat(MA['solana']||0).toFixed(2),           // L: SOL INV
+      parseFloat(MA['avalanche-2']||0).toFixed(2),      // M: AVAX INV
+      parseFloat(MA['internet-computer']||0).toFixed(2),// N: ICP INV
+      parseFloat(MA['ripple']||0).toFixed(2),           // O: XRP INV
+      parseFloat(MA['aave']||0).toFixed(2),             // P: AAVE INV
+      parseFloat(MA['uniswap']||0).toFixed(2),          // Q: UNI INV
+      entry.nota                                        // R: NOTA
     ];
     const ok=await appendSheetsRow(row);
     if(ok){
       document.getElementById('shtxt').textContent=`✅ Guardado en Google Sheets — ${entry.fecha}`;
+    }else{
+      document.getElementById('shtxt').textContent=`⚠ Error al guardar en Sheets. Dato guardado localmente.`;
     }
   }
 
@@ -1283,18 +1401,69 @@ async function syncSheets(){
   if(!GS_TOKEN||GS_TOKEN==='LOCAL'){
     openSheetsModal();return;
   }
-  // Re-sincronizar todos los registros locales
-  let count=0;
-  for(const entry of HIST.slice(0,10)){
-    const row=[entry.fecha,entry.capital,entry.cambio,entry.pct+'%',
-      entry.btc||'',entry.eth||'',entry.sol||'',entry.fg||'',entry.signal||'','','','','','','','','',entry.nota||''];
-    const ok=await appendSheetsRow(row);
-    if(ok)count++;
-    await w(300);
+  const btn=event?.target;
+  if(btn){btn.textContent='⏳ Sincronizando...';btn.disabled=true;}
+
+  try{
+    // 1) Leer datos existentes en Sheets
+    const readRes=await sheetsAPI('GET',`/values/A2:R1000`);
+    const rows=readRes.values||[];
+    if(rows.length>0){
+      // Convertir filas de Sheets al formato local
+      // Filtrar filas que tienen fecha real (no vacías ni "PORTAFOLIO")
+      const sheetHist=rows
+        .filter(r=>r[0]&&r[0]!=='PORTAFOLIO'&&r[0]!=='FECHA')
+        .map(r=>({
+          fecha:r[0]||'',
+          capital:r[1]||'0',
+          cambio:r[2]||'0',
+          pct:(r[3]||'0').replace('%',''),
+          btc:r[4]||'0',
+          eth:r[5]||'0',
+          sol:r[6]||'0',
+          fg:r[7]||'—',
+          signal:r[8]||'—',
+          nota:r[17]||''
+        }));
+      // Merge con datos locales (Sheets tiene prioridad para fechas que coincidan)
+      const localDates=new Set(HIST.map(h=>h.fecha));
+      const newFromSheets=sheetHist.filter(h=>!localDates.has(h.fecha));
+      HIST=[...HIST,...newFromSheets].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+      if(HIST.length>365)HIST=HIST.slice(0,365);
+      localStorage.setItem('llb_h',JSON.stringify(HIST));
+      renderHist();
+    }
+
+    // 2) Subir registros locales que no estén en Sheets
+    const sheetDates=new Set((readRes.values||[]).map(r=>r[0]).filter(Boolean));
+    let uploaded=0;
+    for(const entry of HIST.slice(0,30)){
+      if(!sheetDates.has(entry.fecha)){
+        const row=[
+          entry.fecha,
+          parseFloat(entry.capital)||0,
+          parseFloat(entry.cambio)||0,
+          entry.pct+'%',
+          parseFloat(entry.btc)||0,
+          parseFloat(entry.eth)||0,
+          parseFloat(entry.sol)||0,
+          entry.fg||'',
+          entry.signal||'',
+          '','','','','','','','',
+          entry.nota||''
+        ];
+        const ok=await appendSheetsRow(row);
+        if(ok)uploaded++;
+        await w(300);
+      }
+    }
+
+    document.getElementById('shtxt').textContent=`✅ Sheets sincronizado — ${rows.length} registros leídos, ${uploaded} nuevos subidos`;
+    if(btn){btn.textContent='✅ Sincronizado';setTimeout(()=>{btn.textContent='↑ Sincronizar';btn.disabled=false;},3000);}
+  }catch(e){
+    document.getElementById('shtxt').textContent=`⚠ Error de sincronización: ${e.message}`;
+    if(btn){btn.textContent='↑ Sincronizar';btn.disabled=false;}
   }
-  document.getElementById('shtxt').textContent=`✅ ${count} registros sincronizados con Google Sheets`;
-  const btn=event.target;btn.textContent=`✅ ${count} filas guardadas`;
-  setTimeout(()=>btn.textContent='↑ Sincronizar',3000);
 }
 
 function renderHist(){
