@@ -1,0 +1,84 @@
+{
+  "meta": {
+    "nombre": "Lulubit PRO Portfolio",
+    "version": "2.0.0",
+    "fecha": "2026-05-17",
+    "descripcion": "Portafolio editable — ingresa tus montos reales en la app. Los agentes IA analizarán tu inversión vs el mercado live.",
+    "spreadsheet_id": "1qeRTgwUjWXiV-DFzFkrqN4nvgo9K_kakmtZgXVR-_X0",
+    "nota": "Este JSON es de referencia. Los montos reales se ingresan en la interfaz y se guardan en localStorage."
+  },
+  "estrategia": {
+    "perfil": "Balanceado",
+    "horizonte": "Largo plazo (2-5 años)",
+    "rebalanceo": "Mensual",
+    "stable_minimo_pct": 10,
+    "stable_maximo_pct": 18,
+    "btc_eth_minimo_pct": 50,
+    "stop_loss_general_pct": 20,
+    "dca": "Recomendado para posiciones principales (BTC, ETH, SOL)"
+  },
+  "apis": {
+    "precios": "https://api.coingecko.com/api/v3/coins/markets",
+    "sparklines": "https://api.coingecko.com/api/v3/coins/markets?sparkline=true",
+    "grafico_detalle": "https://api.coingecko.com/api/v3/coins/{id}/market_chart",
+    "fear_greed": "https://api.alternative.me/fng/",
+    "refresh_interval_min": 30,
+    "nota": "CoinGecko API publica gratuita — sin API key requerida para uso basico"
+  },
+  "activos": [
+    { "ticker": "BTC",  "coingecko_id": "bitcoin",                 "pct_ideal": 30, "categoria": "security", "color": "#f7931a", "enfoque": "Seguridad y reserva de valor largo plazo" },
+    { "ticker": "ETH",  "coingecko_id": "ethereum",                "pct_ideal": 20, "categoria": "growth",   "color": "#627eea", "enfoque": "Contratos inteligentes y DeFi institucional" },
+    { "ticker": "SOL",  "coingecko_id": "solana",                  "pct_ideal": 15, "categoria": "growth",   "color": "#9945ff", "enfoque": "Alto crecimiento y adopcion reciente" },
+    { "ticker": "AVAX", "coingecko_id": "avalanche-2",             "pct_ideal": 5,  "categoria": "growth",   "color": "#e84142", "enfoque": "Ecosistema emergente dApps" },
+    { "ticker": "ICP",  "coingecko_id": "internet-computer",       "pct_ideal": 5,  "categoria": "growth",   "color": "#29abe2", "enfoque": "Innovacion / descentralizacion IA y cloud" },
+    { "ticker": "XRP",  "coingecko_id": "ripple",                  "pct_ideal": 5,  "categoria": "pay",      "color": "#00aae4", "enfoque": "Pagos internacionales y banca" },
+    { "ticker": "AAVE", "coingecko_id": "aave",                    "pct_ideal": 2,  "categoria": "defi",     "color": "#b6509e", "enfoque": "Prestamos descentralizados" },
+    { "ticker": "UNI",  "coingecko_id": "uniswap",                 "pct_ideal": 2,  "categoria": "defi",     "color": "#ff007a", "enfoque": "Exchange descentralizado" },
+    { "ticker": "DOT",  "coingecko_id": "polkadot",                "pct_ideal": 2,  "categoria": "infra",    "color": "#e6007a", "enfoque": "Interoperabilidad multi-chain" },
+    { "ticker": "ATOM", "coingecko_id": "cosmos",                  "pct_ideal": 2,  "categoria": "infra",    "color": "#6f7390", "enfoque": "Infraestructura conexion blockchain" },
+    { "ticker": "TRX",  "coingecko_id": "tron",                    "pct_ideal": 2,  "categoria": "pay",      "color": "#ff0013", "enfoque": "Pagos y stablecoins rapidas" },
+    { "ticker": "GRT",  "coingecko_id": "the-graph",               "pct_ideal": 1,  "categoria": "infra",    "color": "#6f4cff", "enfoque": "Indexacion de datos blockchain" },
+    { "ticker": "ALGO", "coingecko_id": "algorand",                "pct_ideal": 1,  "categoria": "growth",   "color": "#00b4d2", "enfoque": "Tecnologia blockchain eficiente" },
+    { "ticker": "XTZ",  "coingecko_id": "tezos",                   "pct_ideal": 1,  "categoria": "infra",    "color": "#0f61ff", "enfoque": "Smart contracts con gobernanza" },
+    { "ticker": "DOGE", "coingecko_id": "dogecoin",                "pct_ideal": 1,  "categoria": "spec",     "color": "#c2a633", "enfoque": "Especulacion / comunidad meme" },
+    { "ticker": "1INCH","coingecko_id": "1inch",                   "pct_ideal": 1,  "categoria": "defi",     "color": "#1b6bff", "enfoque": "Agregador DeFi" },
+    { "ticker": "ANKR", "coingecko_id": "ankr",                    "pct_ideal": 1,  "categoria": "infra",    "color": "#2e6cf6", "enfoque": "Infraestructura Web3 / nodos" },
+    { "ticker": "MANA", "coingecko_id": "decentraland",            "pct_ideal": 1,  "categoria": "spec",     "color": "#ff2d55", "enfoque": "Metaverso / mundo virtual" },
+    { "ticker": "CHZ",  "coingecko_id": "chiliz",                  "pct_ideal": 1,  "categoria": "spec",     "color": "#cd0124", "enfoque": "Fan tokens deportivos" },
+    { "ticker": "DAI",  "coingecko_id": "dai",                     "pct_ideal": 3,  "categoria": "stable",   "color": "#f5ac37", "enfoque": "Stablecoin descentralizada / refugio" },
+    { "ticker": "USDT", "coingecko_id": "tether",                  "pct_ideal": 5,  "categoria": "stable",   "color": "#26a17b", "enfoque": "Liquidez principal" },
+    { "ticker": "PYUSD","coingecko_id": "paypal-usd",              "pct_ideal": 2,  "categoria": "stable",   "color": "#0070ba", "enfoque": "Stablecoin institucional PayPal" },
+    { "ticker": "PAXG", "coingecko_id": "pax-gold",                "pct_ideal": 3,  "categoria": "stable",   "color": "#c9a84c", "enfoque": "Refugio respaldado en oro fisico" },
+    { "ticker": "XAUT", "coingecko_id": "tether-gold",             "pct_ideal": 2,  "categoria": "stable",   "color": "#f4d03f", "enfoque": "Refugio respaldado en oro fisico" },
+    { "ticker": "POL",  "coingecko_id": "polygon-ecosystem-token", "pct_ideal": 1,  "categoria": "infra",    "color": "#8247e5", "enfoque": "Escalabilidad ecosistema Polygon" },
+    { "ticker": "SKY",  "coingecko_id": "sky-mavis",               "pct_ideal": 0,  "categoria": "spec",     "color": "#9ecae1", "enfoque": "Especulativo / posicion opcional" }
+  ],
+  "categorias": {
+    "security":  { "label": "Seguridad",        "color": "#38bdf8", "descripcion": "Activos de bajo riesgo relativo, alta liquidez y adopcion institucional" },
+    "growth":    { "label": "Crecimiento",      "color": "#00e5a0", "descripcion": "Alto potencial de apreciacion, mayor volatilidad, horizontes 1-3 años" },
+    "defi":      { "label": "DeFi",             "color": "#c084fc", "descripcion": "Finanzas descentralizadas: prestamos, exchanges, agregadores" },
+    "stable":    { "label": "Estables/Refugio", "color": "#fbbf24", "descripcion": "Preservacion de capital, liquidez de emergencia y cobertura" },
+    "spec":      { "label": "Especulativas",    "color": "#ff4d6a", "descripcion": "Alta volatilidad, solo para porcentajes minimos del portafolio" },
+    "pay":       { "label": "Pagos",            "color": "#38bdf8", "descripcion": "Enfocadas en pagos internacionales y transferencias rapidas" },
+    "infra":     { "label": "Infraestructura",  "color": "#34d399", "descripcion": "Infraestructura blockchain, interoperabilidad y herramientas" }
+  },
+  "reglas": {
+    "comprar_cuando": [
+      "RSI de cualquier activo cae por debajo de 30 (sobreventa)",
+      "BTC o ETH caen mas del 5% en el dia",
+      "Fear & Greed Index por debajo de 25 (Extreme Fear)",
+      "Mercado general cae mas del 8% — usar stablecoins de reserva"
+    ],
+    "vender_cuando": [
+      "RSI de un activo supera 80 (sobrecompra)",
+      "Ganancias mayores al 30% en altcoins especulativas",
+      "BTC sube mas del 15% en una sola semana",
+      "Activos especulativos caen mas del 20% sin recuperacion"
+    ],
+    "rebalanceo": [
+      "Mensual: revisar si algun activo supera 2x su porcentaje ideal",
+      "Trimestral: evaluar si la estrategia sigue alineada con objetivos",
+      "Si BTC+ETH caen por debajo del 45% del portafolio: rebalancear urgente"
+    ]
+  }
+}
