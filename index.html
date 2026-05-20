@@ -736,7 +736,7 @@ function savePf(){
   setTimeout(()=>ok.style.display='none',3000);
   updSummary();renderTable(CFILTER);renderPie();
   // sync to sheets if connected
-  if(GS_TOKEN&&GS_TOKEN!=='LOCAL') pushPortfolioToSheets();
+  
 }
 function clearAmounts(){
   if(!confirm('¿Limpiar todos los montos?'))return;
@@ -1343,126 +1343,171 @@ async function saveDay(){
   const tot=getTotal();
   const chg=parseFloat(document.getElementById('inchg').value)||0;
   const note=document.getElementById('innote').value||'';
-  const pct=tot?((chg/tot)*100).toFixed(2):0;
-  // Fecha en formato DD/MM/YYYY para Google Sheets
+  const pct=tot?((chg/tot)*100).toFixed(2):'0';
+
+  // Fecha DD/MM/YYYY
   const now=new Date();
-  const fecha=now.toLocaleDateString('es-PA',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const dd=String(now.getDate()).padStart(2,'0');
+  const mm=String(now.getMonth()+1).padStart(2,'0');
+  const yyyy=now.getFullYear();
+  const fecha=`${dd}/${mm}/${yyyy}`;
+
   const entry={
     fecha,
-    capital:tot.toFixed(2),cambio:chg.toFixed(2),pct,
-    btc:LD['bitcoin']?.price?.toFixed(2)||'0',
-    eth:LD['ethereum']?.price?.toFixed(2)||'0',
-    sol:LD['solana']?.price?.toFixed(2)||'0',
-    fg:FG.v??'—',
-    signal:(document.getElementById('sv-sig')?.textContent||'—').replace(/📈|📉|➡/g,'').trim(),
-    nota:note,
-    amounts:JSON.stringify(MA)
+    capital:tot.toFixed(2),
+    cambio:chg.toFixed(2),
+    pct,
+    btc:LD['bitcoin']?.price?LD['bitcoin'].price.toFixed(2):'0',
+    eth:LD['ethereum']?.price?LD['ethereum'].price.toFixed(2):'0',
+    sol:LD['solana']?.price?LD['solana'].price.toFixed(2):'0',
+    fg:FG.v!=null?String(FG.v):'—',
+    signal:(document.getElementById('sv-sig')?.textContent||'—')
+            .replace('📈 ','').replace('📉 ','').replace('➡ ','').trim(),
+    nota:note
   };
+
+  // Guardar local
+  HIST=HIST.filter(h=>h.fecha!==fecha); // evitar duplicado del mismo día
   HIST.unshift(entry);
   if(HIST.length>365)HIST=HIST.slice(0,365);
   localStorage.setItem('llb_h',JSON.stringify(HIST));
   renderHist();
 
-  // Guardar en Sheets si está conectado — SOLO fila de datos diarios (NO fila de portafolio)
+  // Guardar en Google Sheets
   if(GS_TOKEN&&GS_TOKEN!=='LOCAL'){
     const row=[
-      entry.fecha,                                      // A: FECHA
-      parseFloat(entry.capital),                        // B: CAPITAL INVERTIDO
-      parseFloat(entry.cambio),                         // C: P&L DIA
-      entry.pct+'%',                                    // D: VARIACION %
-      parseFloat(entry.btc)||0,                         // E: BTC PRECIO
-      parseFloat(entry.eth)||0,                         // F: ETH PRECIO
-      parseFloat(entry.sol)||0,                         // G: SOL PRECIO
-      entry.fg,                                         // H: FEAR&GREED
-      entry.signal,                                     // I: SEÑAL MERCADO
-      parseFloat(MA['bitcoin']||0).toFixed(2),          // J: BTC INV
-      parseFloat(MA['ethereum']||0).toFixed(2),         // K: ETH INV
-      parseFloat(MA['solana']||0).toFixed(2),           // L: SOL INV
-      parseFloat(MA['avalanche-2']||0).toFixed(2),      // M: AVAX INV
-      parseFloat(MA['internet-computer']||0).toFixed(2),// N: ICP INV
-      parseFloat(MA['ripple']||0).toFixed(2),           // O: XRP INV
-      parseFloat(MA['aave']||0).toFixed(2),             // P: AAVE INV
-      parseFloat(MA['uniswap']||0).toFixed(2),          // Q: UNI INV
-      entry.nota                                        // R: NOTA
+      entry.fecha,                                          // A FECHA
+      parseFloat(entry.capital),                            // B CAPITAL INVERTIDO
+      parseFloat(entry.cambio),                             // C P&L DIA
+      entry.pct+'%',                                        // D VARIACION %
+      parseFloat(entry.btc)||0,                             // E BTC PRECIO
+      parseFloat(entry.eth)||0,                             // F ETH PRECIO
+      parseFloat(entry.sol)||0,                             // G SOL PRECIO
+      isNaN(parseInt(entry.fg))?0:parseInt(entry.fg),       // H FEAR&GREED
+      entry.signal,                                         // I SEÑAL MERCADO
+      parseFloat(MA['bitcoin']||0)||0,                      // J BTC INV
+      parseFloat(MA['ethereum']||0)||0,                     // K ETH INV
+      parseFloat(MA['solana']||0)||0,                       // L SOL INV
+      parseFloat(MA['avalanche-2']||0)||0,                  // M AVAX INV
+      parseFloat(MA['internet-computer']||0)||0,            // N ICP INV
+      parseFloat(MA['ripple']||0)||0,                       // O XRP INV
+      parseFloat(MA['aave']||0)||0,                         // P AAVE INV
+      parseFloat(MA['uniswap']||0)||0,                      // Q UNI INV
+      entry.nota                                            // R NOTA
     ];
     const ok=await appendSheetsRow(row);
-    if(ok){
-      document.getElementById('shtxt').textContent=`✅ Guardado en Google Sheets — ${entry.fecha}`;
-    }else{
-      document.getElementById('shtxt').textContent=`⚠ Error al guardar en Sheets. Dato guardado localmente.`;
-    }
+    document.getElementById('shtxt').textContent=ok
+      ?`✅ Guardado en Google Sheets — ${entry.fecha}`
+      :`⚠ Error al guardar en Sheets — dato guardado localmente`;
   }
 
-  const btn=event.target;btn.textContent='✅ Guardado';
-  setTimeout(()=>btn.textContent='💾 Guardar',2500);
+  const btn=event?.target;
+  if(btn){btn.textContent='✅ Guardado';setTimeout(()=>btn.textContent='💾 Guardar',2500);}
+  document.getElementById('inchg').value='';
+  document.getElementById('innote').value='';
 }
 
 async function syncSheets(){
-  if(!GS_TOKEN||GS_TOKEN==='LOCAL'){
-    openSheetsModal();return;
-  }
+  if(!GS_TOKEN||GS_TOKEN==='LOCAL'){openSheetsModal();return;}
   const btn=event?.target;
   if(btn){btn.textContent='⏳ Sincronizando...';btn.disabled=true;}
-
   try{
-    // 1) Leer datos existentes en Sheets
-    const readRes=await sheetsAPI('GET',`/values/A2:R1000`);
-    const rows=readRes.values||[];
-    if(rows.length>0){
-      // Convertir filas de Sheets al formato local
-      // Filtrar filas que tienen fecha real (no vacías ni "PORTAFOLIO")
-      const sheetHist=rows
-        .filter(r=>r[0]&&r[0]!=='PORTAFOLIO'&&r[0]!=='FECHA')
-        .map(r=>({
-          fecha:r[0]||'',
-          capital:r[1]||'0',
-          cambio:r[2]||'0',
-          pct:(r[3]||'0').replace('%',''),
-          btc:r[4]||'0',
-          eth:r[5]||'0',
-          sol:r[6]||'0',
-          fg:r[7]||'—',
-          signal:r[8]||'—',
-          nota:r[17]||''
-        }));
-      // Merge con datos locales (Sheets tiene prioridad para fechas que coincidan)
-      const localDates=new Set(HIST.map(h=>h.fecha));
-      const newFromSheets=sheetHist.filter(h=>!localDates.has(h.fecha));
-      HIST=[...HIST,...newFromSheets].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-      if(HIST.length>365)HIST=HIST.slice(0,365);
-      localStorage.setItem('llb_h',JSON.stringify(HIST));
-      renderHist();
-    }
+    // ── PASO 1: Leer todas las filas actuales ──
+    const readRes=await sheetsAPI('GET',`/values/A1:R1000`);
+    const allRows=readRes.values||[];
 
-    // 2) Subir registros locales que no estén en Sheets
-    const sheetDates=new Set((readRes.values||[]).map(r=>r[0]).filter(Boolean));
-    let uploaded=0;
-    for(const entry of HIST.slice(0,30)){
-      if(!sheetDates.has(entry.fecha)){
-        const row=[
-          entry.fecha,
-          parseFloat(entry.capital)||0,
-          parseFloat(entry.cambio)||0,
-          entry.pct+'%',
-          parseFloat(entry.btc)||0,
-          parseFloat(entry.eth)||0,
-          parseFloat(entry.sol)||0,
-          entry.fg||'',
-          entry.signal||'',
-          '','','','','','','','',
-          entry.nota||''
-        ];
-        const ok=await appendSheetsRow(row);
-        if(ok)uploaded++;
-        await w(300);
+    // ── PASO 2: Detectar y eliminar filas basura (PORTAFOLIO sin fecha real) ──
+    // Identificar índices de filas inválidas (base 0, fila 0 = cabecera)
+    const badIndices=[];
+    allRows.forEach((r,i)=>{
+      if(i===0)return; // saltar cabecera
+      const fecha=r[0]||'';
+      // Es basura si: está vacía, dice "PORTAFOLIO", o no tiene formato de fecha
+      if(!fecha||fecha==='PORTAFOLIO'||fecha==='FECHA'||!/\d/.test(fecha)){
+        badIndices.push(i);
       }
+    });
+
+    // Borrar filas basura de abajo hacia arriba (para no desplazar índices)
+    for(let i=badIndices.length-1;i>=0;i--){
+      const rowIdx=badIndices[i]; // 0-based, fila 0 = cabecera
+      try{
+        await sheetsAPI('POST',`/batchUpdate`,{
+          requests:[{deleteDimension:{range:{sheetId:0,dimension:'ROWS',startIndex:rowIdx,endIndex:rowIdx+1}}}]
+        });
+        await w(200);
+      }catch(e){console.warn('delete row err:',e.message);}
     }
 
-    document.getElementById('shtxt').textContent=`✅ Sheets sincronizado — ${rows.length} registros leídos, ${uploaded} nuevos subidos`;
-    if(btn){btn.textContent='✅ Sincronizado';setTimeout(()=>{btn.textContent='↑ Sincronizar';btn.disabled=false;},3000);}
+    // ── PASO 3: Volver a leer las filas limpias ──
+    await w(400);
+    const cleanRes=await sheetsAPI('GET',`/values/A2:R1000`);
+    const cleanRows=cleanRes.values||[];
+
+    // ── PASO 4: Cargar datos de Sheets al histórico local ──
+    const sheetHist=cleanRows
+      .filter(r=>r[0]&&/\d/.test(r[0]))
+      .map(r=>({
+        fecha:r[0]||'',
+        capital:r[1]||'0',
+        cambio:r[2]||'0',
+        pct:(r[3]||'0').replace('%',''),
+        btc:r[4]||'0',
+        eth:r[5]||'0',
+        sol:r[6]||'0',
+        fg:r[7]||'—',
+        signal:r[8]||'—',
+        nota:r[17]||''
+      }));
+
+    // Merge: combinar Sheets + local sin duplicar fechas
+    const sheetDates=new Set(sheetHist.map(h=>h.fecha));
+    const localOnly=HIST.filter(h=>!sheetDates.has(h.fecha));
+    HIST=[...sheetHist,...localOnly].sort((a,b)=>{
+      // Ordenar por fecha descendente
+      const pa=a.fecha.split('/').reverse().join('-');
+      const pb=b.fecha.split('/').reverse().join('-');
+      return pb.localeCompare(pa);
+    });
+    if(HIST.length>365)HIST=HIST.slice(0,365);
+    localStorage.setItem('llb_h',JSON.stringify(HIST));
+    renderHist();
+
+    // ── PASO 5: Subir registros locales que no están en Sheets ──
+    let uploaded=0;
+    for(const entry of localOnly.slice(0,20)){
+      const row=[
+        entry.fecha,
+        parseFloat(entry.capital)||0,
+        parseFloat(entry.cambio)||0,
+        entry.pct+'%',
+        parseFloat(entry.btc)||0,
+        parseFloat(entry.eth)||0,
+        parseFloat(entry.sol)||0,
+        isNaN(parseInt(entry.fg))?0:parseInt(entry.fg),
+        entry.signal||'',
+        parseFloat(MA['bitcoin']||0)||0,
+        parseFloat(MA['ethereum']||0)||0,
+        parseFloat(MA['solana']||0)||0,
+        parseFloat(MA['avalanche-2']||0)||0,
+        parseFloat(MA['internet-computer']||0)||0,
+        parseFloat(MA['ripple']||0)||0,
+        parseFloat(MA['aave']||0)||0,
+        parseFloat(MA['uniswap']||0)||0,
+        entry.nota||''
+      ];
+      const ok=await appendSheetsRow(row);
+      if(ok)uploaded++;
+      await w(350);
+    }
+
+    const msg=`✅ Sheets sincronizado — ${sheetHist.length} registros válidos, ${badIndices.length} filas basura eliminadas, ${uploaded} nuevos subidos`;
+    document.getElementById('shtxt').textContent=msg;
+    if(btn){btn.textContent='✅ Listo';setTimeout(()=>{btn.textContent='↑ Sincronizar';btn.disabled=false;},3500);}
   }catch(e){
-    document.getElementById('shtxt').textContent=`⚠ Error de sincronización: ${e.message}`;
+    document.getElementById('shtxt').textContent=`⚠ Error: ${e.message}`;
     if(btn){btn.textContent='↑ Sincronizar';btn.disabled=false;}
+    console.error('syncSheets:',e);
   }
 }
 
@@ -1474,17 +1519,22 @@ function renderHist(){
   }
   tb.innerHTML=HIST.slice(0,60).map(r=>{
     const c=parseFloat(r.cambio)||0,col=c>=0?'var(--g)':'var(--rd)';
+    // Limpiar señal: quitar emojis y espacios extra
+    const sig=(r.signal||'—').replace(/📈|📉|➡|🔸/g,'').trim()||'—';
+    // Determinar clase de señal para el badge
+    const sigClass=sig.includes('ALCISTA')||sig.includes('BUY')?'BUY':
+                   sig.includes('BAJISTA')||sig.includes('SELL')?'SELL':'HOLD';
     return`<tr>
-      <td style="font-size:.63rem">${r.fecha}</td>
+      <td style="font-size:.63rem;font-family:var(--mo)">${r.fecha}</td>
       <td class="r" style="color:var(--g);font-size:.63rem">$${parseFloat(r.capital||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
       <td class="r" style="color:${col};font-size:.63rem">${c>=0?'+':''}$${Math.abs(c).toFixed(2)}</td>
       <td class="r" style="color:${col};font-size:.63rem">${c>=0?'+':''}${r.pct}%</td>
-      <td class="r" style="font-size:.58rem;color:var(--mu2)">$${parseFloat(r.btc||0).toLocaleString()}</td>
-      <td class="r" style="font-size:.58rem;color:var(--mu2)">$${parseFloat(r.eth||0).toLocaleString()}</td>
-      <td class="r" style="font-size:.58rem;color:var(--mu2)">$${parseFloat(r.sol||0).toLocaleString()}</td>
+      <td class="r" style="font-size:.58rem;color:var(--mu2)">$${parseFloat(r.btc||0).toLocaleString('en-US',{maximumFractionDigits:0})}</td>
+      <td class="r" style="font-size:.58rem;color:var(--mu2)">$${parseFloat(r.eth||0).toLocaleString('en-US',{maximumFractionDigits:0})}</td>
+      <td class="r" style="font-size:.58rem;color:var(--mu2)">$${parseFloat(r.sol||0).toFixed(2)}</td>
       <td class="r" style="font-size:.58rem;color:var(--pu)">${r.fg||'—'}</td>
-      <td class="r"><span class="sig HOLD" style="font-size:.48rem">${(r.signal||'—').replace('📈 ','').replace('📉 ','').replace('➡ ','')}</span></td>
-      <td style="font-size:.58rem;color:var(--mu2);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nota||'—'}</td>
+      <td class="r"><span class="sig ${sigClass}" style="font-size:.5rem">${sig}</span></td>
+      <td style="font-size:.58rem;color:var(--mu2);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nota||'—'}</td>
     </tr>`;
   }).join('');
   updHistChart(HIST.slice(0,30).reverse());
